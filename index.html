@@ -1,3 +1,52 @@
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script>
+ const firebaseConfig = {
+  apiKey: "AIzaSyApY3TDB91o-gOX8lH0r0qMEDA-F5VTedc",
+  authDomain: "kitap-uygulamam.firebaseapp.com",
+  projectId: "kitap-uygulamam",
+  storageBucket: "kitap-uygulamam.firebasestorage.app",
+  messagingSenderId: "926284040375",
+  appId: "1:926284040375:web:fbf6b014640f620047e532",
+  measurementId: "G-TGW6N30D1N"
+};
+
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // Firestore'a veri ekleyen fonksiyon
+  function firebaseBolumEkle(baslik, icerik) {
+    return db.collection("kitap").add({
+      baslik,
+      icerik,
+      zaman: new Date()
+    });
+  }
+
+  // Firestore'dan veri silme
+  function firebaseBolumSil(id) {
+    return db.collection("kitap").doc(id).delete();
+  }
+
+  // Firestore'dan veri yükleme
+  function firebaseBolumleriGetir(callback) {
+    db.collection("kitap").orderBy("zaman").get().then(snapshot => {
+      const bolumler = [];
+      snapshot.forEach(doc => {
+        bolumler.push({
+          id: doc.id,
+          baslik: doc.data().baslik,
+          icerik: doc.data().icerik
+        });
+      });
+      callback(bolumler);
+    });
+  }
+</script>
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
