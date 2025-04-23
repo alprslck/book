@@ -1,12 +1,305 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
   <title>Kitap Yazarı</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.3s, color 0.3s;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      cursor: pointer;
+    }
+    #kitap {
+      white-space: pre-wrap;
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .bolum {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 10px;
+      cursor: move;
+    }
+    .dark-mode {
+      --bg: #121212;
+      --text: #fff;
+      --input-bg: #333;
+      --card-bg: #1e1e1e;
+    }
+    .light-mode {
+      --bg: #f4f4f4;
+      --text: #000;
+      --input-bg: #fff;
+      --card-bg: #fff;
+    }
+  </style>
 </head>
-<body>
+<body class="light-mode">
   <h1>Kitap Yazma Uygulaması</h1>
-  <p>Bu, GitHub Pages üzerinden yayınlayabileceğin bir kitap yazma uygulamasının örneğidir.</p>
+  <label>Kitap Başlığı</label>
+  <input type="text" id="baslik" placeholder="Kitap Başlığı" />
+
+  <label>Bölüm Başlığı</label>
+  <input type="text" id="bolumBaslik" placeholder="Bölüm Başlığı" />
+
+  <label>Bölüm Metni</label>
+  <textarea id="bolum" placeholder="Bölüm metnini buraya yaz..." rows="25" spellcheck="true"></textarea>
+<p><strong>Kelime Sayısı:</strong> <span id="kelimeSayisi">0</span>
+<strong>Harf Sayısı:</strong> <span id="harfSayisi">0</span>
+</p>
+
+<h2>📝 Yazar Notları</h2>
+<textarea id="notlar" placeholder="Buraya fikirlerini, küçük notları yazabilirsin..." rows="5"></textarea>
+<p><strong>Kelime Sayısı:</strong> <span id="kelimeSayisi">0</span>
+<strong>Harf Sayısı:</strong> <span id="harfSayisi">0</span>
+</p>
+
+  
+  <button onclick="konusmayaBasla()">🎙️ Konuşarak Yaz</button>
+  
+  <label>Dil Seç:</label>
+<select id="dilSec">
+  <option value="tr-TR">Türkçe</option>
+  <option value="en-US">English</option>
+</select>
+
+  <button onclick="bolumEkle()">Bölüm Ekle</button>
+  <button onclick="kitabiIndirTXT()">Kitabı TXT İndir</button>
+  <button onclick="kitabiIndirPDF()">Kitabı PDF İndir</button>
+  <button onclick="temaDegistir()">Tema Değiştir</button>
+  <input type="text" id="arama" placeholder="Bul..." oninput="bulVeVurgula()" />
+  <input type="text" id="degistir" placeholder="Değiştir..." />
+  <button onclick="degistirMetin()">Bul ve Değiştir</button>
+
+  <h2>Kitap İçeriği:</h2>
+  <div id="kitap"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    let kitap = JSON.parse(localStorage.getItem("kitap")) || [];
+    let tema = localStorage.getItem("tema") || "light";
+    let suruklenenIndex = null;
+
+    if (tema === "dark") {
+      document.body.className = "dark-mode";
+    }
+
+    window.bolumEkle = function () {
+      const baslik = document.getElementById('bolumBaslik').value;
+      const icerik = document.getElementById('bolum').value;
+      if (icerik.trim() === "") return alert("Bölüm boş olamaz!");
+
+      kitap.push({ baslik, icerik });
+      document.getElementById('bolum').value = "";
+      document.getElementById('bolumBaslik').value = "";
+      guncelleGorunum();
+      localStorage.setItem("kitap", JSON.stringify(kitap));
+    }
+
+    window.bolumSil = function (index) {
+      if (confirm("Bu bölümü silmek istiyor musun?")) {
+        kitap.splice(index, 1);
+        localStorage.setItem("kitap", JSON.stringify(kitap));
+        guncelleGorunum();
+      }
+    }
+
+    window.bolumDuzenle = function (index) {
+      const yeniBaslik = prompt("Yeni bölüm başlığı:", kitap[index].baslik);
+      const yeniIcerik = prompt("Yeni bölüm içeriği:", kitap[index].icerik);
+      if (yeniIcerik !== null) {
+        kitap[index] = { baslik: yeniBaslik, icerik: yeniIcerik };
+        localStorage.setItem("kitap", JSON.stringify(kitap));
+        guncelleGorunum();
+      }
+    }
+
+    function guncelleGorunum() {
+      const div = document.getElementById('kitap');
+      div.innerHTML = kitap.map((b, i) => `
+        <div class="bolum" draggable="true" ondragstart="surukle(${i})" ondragover="event.preventDefault()" ondrop="birak(${i})">
+          <strong>Bölüm ${i + 1}: ${b.baslik || '(Başlıksız)'}</strong>
+          <p>${b.icerik}</p>
+          <button onclick="bolumDuzenle(${i})">Düzenle</button>
+          <button onclick="bolumSil(${i})">Sil</button>
+        </div>
+      `).join('');
+    }
+
+    window.kitabiIndirTXT = function () {
+      const baslik = document.getElementById('baslik').value || "kitap";
+      const metin = kitap.map((b, i) => `Bölüm ${i + 1}: ${b.baslik}\n${b.icerik}`).join("\n\n---\n\n");
+      const blob = new Blob([metin], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${baslik}.txt`;
+      link.click();
+    }
+
+    window.kitabiIndirPDF = async function () {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+      kitap.forEach((b, i) => {
+        doc.setFontSize(14);
+        doc.text(`Bölüm ${i + 1}: ${b.baslik}`, 10, y);
+        y += 7;
+        doc.setFontSize(12);
+        const satirlar = doc.splitTextToSize(b.icerik, 180);
+        satirlar.forEach(satir => {
+          if (y > 280) {
+            doc.addPage();
+            y = 10;
+          }
+          doc.text(satir, 10, y);
+          y += 7;
+        });
+        y += 10;
+      });
+      doc.save((document.getElementById('baslik').value || 'kitap') + '.pdf');
+    }
+
+    window.temaDegistir = function () {
+      if (document.body.classList.contains("light-mode")) {
+        document.body.className = "dark-mode";
+        localStorage.setItem("tema", "dark");
+      } else {
+        document.body.className = "light-mode";
+        localStorage.setItem("tema", "light");
+      }
+    }
+
+    window.surukle = function (i) {
+      suruklenenIndex = i;
+    }
+
+    window.birak = function (i) {
+      const bolum = kitap[suruklenenIndex];
+      kitap.splice(suruklenenIndex, 1);
+      kitap.splice(i, 0, bolum);
+      localStorage.setItem("kitap", JSON.stringify(kitap));
+      guncelleGorunum();
+    }
+
+    window.bulVeVurgula = function () {
+      const aranan = document.getElementById("arama").value.toLowerCase();
+      const div = document.getElementById("kitap");
+      if (!aranan) return guncelleGorunum();
+
+      div.innerHTML = kitap.map((b, i) => {
+        const baslik = b.baslik.replace(new RegExp(aranan, "gi"), match => `<mark>${match}</mark>`);
+        const icerik = b.icerik.replace(new RegExp(aranan, "gi"), match => `<mark>${match}</mark>`);
+        return `
+          <div class="bolum">
+            <strong>Bölüm ${i + 1}: ${baslik || '(Başlıksız)'}</strong>
+            <p>${icerik}</p>
+            <button onclick="bolumDuzenle(${i})">Düzenle</button>
+            <button onclick="bolumSil(${i})">Sil</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.degistirMetin = function () {
+      const aranan = document.getElementById("arama").value;
+      const yenisi = document.getElementById("degistir").value;
+      kitap = kitap.map(b => ({
+        baslik: b.baslik.replaceAll(aranan, yenisi),
+        icerik: b.icerik.replaceAll(aranan, yenisi)
+      }));
+      localStorage.setItem("kitap", JSON.stringify(kitap));
+      guncelleGorunum();
+    }
+
+// Sayfa yüklendiğinde daha önce yazılan notları göster
+document.getElementById("bolum").value = localStorage.getItem("bolum") || "";
+
+// Notlar değişince kaydet
+document.getElementById("bolum").addEventListener("input", function() {
+  localStorage.setItem("bolum", this.value);
+});
+
+
+// Sayfa yüklendiğinde daha önce yazılan notları göster
+document.getElementById("notlar").value = localStorage.getItem("notlar") || "";
+
+// Notlar değişince kaydet
+document.getElementById("notlar").addEventListener("input", function() {
+  localStorage.setItem("notlar", this.value);
+});
+
+document.getElementById('bolum').addEventListener('input', function () {
+  const metin = this.value;
+  const kelimeler = metin.trim() === "" ? 0 : metin.trim().split(/\s+/).length;
+  const harfler = metin.replace(/\s/g, "").length;
+
+  document.getElementById('kelimeSayisi').textContent = kelimeler;
+  document.getElementById('harfSayisi').textContent = harfler;
+});
+
+document.getElementById('notlar').addEventListener('input', function () {
+  const metin = this.value;
+  const kelimeler = metin.trim() === "" ? 0 : metin.trim().split(/\s+/).length;
+  const harfler = metin.replace(/\s/g, "").length;
+
+  document.getElementById('kelimeSayisi').textContent = kelimeler;
+  document.getElementById('harfSayisi').textContent = harfler;
+});
+
+
+    guncelleGorunum();
+    
+    function konusmayaBasla() {
+  if (!('webkitSpeechRecognition' in window)) {
+    alert("Tarayıcınız konuşma tanımayı desteklemiyor.");
+    return;
+  }
+
+  const recognition = new webkitSpeechRecognition();
+  const secilenDil = document.getElementById("dilSec").value;
+  recognition.lang = secilenDil;
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.start();
+
+  recognition.onstart = function () {
+    console.log("Konuşma başlatıldı...");
+  };
+
+  recognition.onresult = function (event) {
+    const transcript = event.results[0][0].transcript;
+    document.getElementById("bolum").value += transcript + " ";
+  };
+
+  recognition.onerror = function (event) {
+    console.error("Hata oluştu: ", event.error);
+  };
+
+  recognition.onend = function () {
+    console.log("Konuşma sona erdi.");
+  };
+}
+
+  </script>
 </body>
 </html>
